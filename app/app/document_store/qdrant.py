@@ -2,6 +2,7 @@ from typing import Dict, List, Optional, Text
 
 import qdrant_client
 from pyassorted.asyncio import run_func
+from qdrant_client.models import models as qdrant_models
 
 from .abc import DocumentStore
 from app.config import logger, settings
@@ -25,6 +26,9 @@ class QdrantDocumentStore(DocumentStore):
         self._host = settings.QDRANT_URL
         self._port = int(settings.QDRANT_PORT)
         self._grpc_port = int(settings.QDRANT_GRPC_PORT)
+        self.vector_size = int(vector_size)
+        self.distance = distance
+
         self.client = qdrant_client.QdrantClient(
             url=self._host,
             port=self._port,
@@ -50,6 +54,16 @@ class QdrantDocumentStore(DocumentStore):
         except Exception as e:
             if "Not found: Collection" in str(e):
                 logger.info(f"Create collection: {self.collection_name}")
+                try:
+                    self.client.create_collection(
+                        self.collection_name,
+                        vectors_config=qdrant_models.VectorParams(
+                            size=self.vector_size,
+                            distance=self.distance,
+                        ),
+                    )
+                except Exception as e:
+                    logger.exception(e)
             else:
                 logger.exception(e)
         return False
