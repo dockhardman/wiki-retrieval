@@ -1,0 +1,14 @@
+version: "3"
+
+services:
+  wiki-retrieval-service:
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX}
+    ports:
+      - "8990:80"
+    volumes:
+      - ./app:/app
+    deploy:
+      resources:
+        limits:
+          memory: 1G
