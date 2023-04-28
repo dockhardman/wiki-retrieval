@@ -3,6 +3,11 @@ import copy
 import logging
 from typing import Text
 
+from rich.console import Console
+
+
+console = Console()
+
 
 class Settings:
     def __init__(self, **kwargs):
@@ -27,6 +32,16 @@ class Settings:
 
         # OpenAI Config
         self.OPENAI_API_KEY = environ.get("OPENAI_API_KEY")
+
+        # Retrieval Config
+        self.VECTOR_SIZE = int(environ.get("VECTOR_SIZE", "1536"))
+        self.DATASTORE = environ.get("DATASTORE", "qdrant")
+        self.BEARER_TOKEN = environ.get("BEARER_TOKEN")
+        self.QDRANT_URL = environ.get("QDRANT_URL", "wiki-qdrant-service")
+        self.QDRANT_PORT = int(environ.get("QDRANT_PORT", "6333"))
+        self.QDRANT_GRPC_PORT = int(environ.get("QDRANT_GRPC_PORT", "6334"))
+        self.QDRANT_API_KEY = environ.get("QDRANT_API_KEY")
+        self.QDRANT_COLLECTION = environ.get("QDRANT_COLLECTION", "wiki_documents")
 
 
 settings = Settings()
