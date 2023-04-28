@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "wiki-retrieval"
+version = "0.1.0"
+description = "\"wiki-retrieval\" is a document retrieval service that utilizes Wikipedia as its primary data source and is designed to be fully compatible with the OpenAI chatgpt-retrieval-plugin API."
+authors = ["Allen Chou <f1470891079@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "wiki_retrieval"}]
+
+[tool.poetry.dependencies]
+python = ">=3.8.0,<3.11.0"
+rich = "*"
+pytz = "*"
+urllib3 = "*"
+sanic = {extras = ["ext"], version = ">=23.3.0"}
+openai = ">=0.27.0"
+tiktoken = "*"
+dacite = "*"
+pyassorted = "*"
+
+[tool.poetry.group.dev.dependencies]
+black = "*"
+pytest = "*"
+pytest-asyncio = "*"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
