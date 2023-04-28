@@ -55,7 +55,8 @@ class QdrantDocumentStore(DocumentStore):
             if "Not found: Collection" in str(e):
                 logger.info(f"Create collection: {self.collection_name}")
                 try:
-                    self.client.create_collection(
+                    await run_func(
+                        self.client.create_collection,
                         self.collection_name,
                         vectors_config=qdrant_models.VectorParams(
                             size=self.vector_size,
