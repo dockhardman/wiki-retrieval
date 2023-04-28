@@ -1,0 +1,27 @@
+version: "3"
+
+services:
+  wiki-retrieval-service:
+    image: wiki-retrieval:0.1.0
+    container_name: wiki-retrieval-service
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    depends_on:
+      - wiki-qdrant-service
+    networks:
+      - wiki-retrieval-network
+    restart: always
+    tty: true
+
+  wiki-qdrant-service:
+    image: qdrant/qdrant
+    container_name: wiki-qdrant-service
+    networks:
+      - wiki-retrieval-network
+    restart: always
+    tty: true
+
+networks:
+  wiki-retrieval-network:
+      name: wiki-retrieval-network
