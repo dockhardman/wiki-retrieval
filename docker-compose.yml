@@ -7,6 +7,16 @@ services:
     build:
       context: ./
       dockerfile: Dockerfile
+    depends_on:
+      - wiki-qdrant-service
+    networks:
+      - wiki-retrieval-network
+    restart: always
+    tty: true
+
+  wiki-qdrant-service:
+    image: qdrant/qdrant
+    container_name: wiki-qdrant-service
     networks:
       - wiki-retrieval-network
     restart: always

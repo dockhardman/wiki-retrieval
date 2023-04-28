@@ -12,3 +12,14 @@ services:
       resources:
         limits:
           memory: 1G
+
+  wiki-qdrant-service:
+    ports:
+      - "8993:6333"
+      - "8994:6334"
+    volumes:
+      - ./qdrant_storage:/qdrant/storage
+    deploy:
+      resources:
+        limits:
+          memory: 500M
