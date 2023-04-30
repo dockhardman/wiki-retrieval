@@ -8,11 +8,6 @@ class _WithScore:
 
 
 @dataclass
-class _WithChunks:
-    chunks: List["DocumentChunk"]
-
-
-@dataclass
 class _WithEmbedding:
     embedding: List[float]
 
@@ -27,32 +22,20 @@ class DocumentMetadata:
 
 
 @dataclass
-class DocumentChunkMetadata(DocumentMetadata):
-    document_id: Optional[Text] = None
-
-
-@dataclass
-class DocumentChunk:
-    metadata: DocumentChunkMetadata
-    text: str
-    embedding: Optional[List[float]] = None
-    id: Optional[Text] = None
-
-
-@dataclass
-class DocumentChunkWithScore(DocumentChunk, _WithScore):
-    pass
-
-
-@dataclass
 class Document:
-    text: str
+    name: Text
+    text: Text
     id: Optional[Text] = None
     metadata: Optional[DocumentMetadata] = None
 
 
 @dataclass
-class DocumentWithChunks(Document, _WithChunks):
+class DocumentWithScore(Document, _WithScore):
+    pass
+
+
+@dataclass
+class DocumentWithEmbedding(Document, _WithEmbedding):
     pass
 
 
@@ -68,7 +51,7 @@ class DocumentMetadataFilter:
 
 @dataclass
 class Query:
-    query: str
+    query: Text
     filter: Optional[DocumentMetadataFilter] = None
     top_k: Optional[int] = 3
 
@@ -80,5 +63,5 @@ class QueryWithEmbedding(Query, _WithEmbedding):
 
 @dataclass
 class QueryResult:
-    query: str
-    results: List[DocumentChunkWithScore]
+    query: Text
+    results: List[DocumentWithScore]

@@ -1,13 +1,11 @@
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Text
+from typing import List, Optional, Text
 
 from app.schema.models import (
     Document,
-    DocumentChunk,
     DocumentMetadataFilter,
     Query,
     QueryResult,
-    QueryWithEmbedding,
 )
 
 
@@ -31,15 +29,7 @@ class DocumentStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def _upsert(self, chunks: Dict[str, List[DocumentChunk]]) -> List[Text]:
-        raise NotImplementedError
-
-    @abstractmethod
     async def query(self, queries: List[Query]) -> List[QueryResult]:
-        raise NotImplementedError
-
-    @abstractmethod
-    async def _query(self, queries: List[QueryWithEmbedding]) -> List[QueryResult]:
         raise NotImplementedError
 
     @abstractmethod

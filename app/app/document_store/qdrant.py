@@ -1,4 +1,5 @@
-from typing import Dict, List, Optional, Text
+import datetime
+from typing import List, Optional, Text
 
 import qdrant_client
 from pyassorted.asyncio import run_func
@@ -8,11 +9,10 @@ from .abc import DocumentStore
 from app.config import logger, settings
 from app.schema.models import (
     Document,
-    DocumentChunk,
+    DocumentWithEmbedding,
     DocumentMetadataFilter,
     Query,
     QueryResult,
-    QueryWithEmbedding,
 )
 
 
@@ -69,18 +69,30 @@ class QdrantDocumentStore(DocumentStore):
                 logger.exception(e)
         return False
 
-    async def upsert(
-        self, documents: List[Document], chunk_token_size: Optional[int] = None
-    ) -> List[Text]:
-        raise NotImplementedError
-
-    async def _upsert(self, chunks: Dict[str, List[DocumentChunk]]) -> List[Text]:
-        raise NotImplementedError
+    async def upsert(self, documents: List[Document]) -> List[Text]:
+        created_at = datetime.datetime.utcnow().isoformat()
+        emb_documents = await self._embedding_documents(documents)
+        points = [
+            qdrant_models.PointStruct(
+                vector=doc.embedding,
+                payload={
+                    "id": doc.id,
+                    "name": doc.name,
+                    "text": doc.text,
+                    "metadata": doc.metadata.dict(),
+                    "created_at": created_at,
+                },
+            )
+            for doc in emb_documents
+        ]
+        self.client.upsert(
+            collection_name=self.collection_name,
+            points=points,
+            wait=True,
+        )
+        return [d.id for d in documents]
 
     async def query(self, queries: List[Query]) -> List[QueryResult]:
-        raise NotImplementedError
-
-    async def _query(self, queries: List[QueryWithEmbedding]) -> List[QueryResult]:
         raise NotImplementedError
 
     async def delete(
@@ -89,4 +101,9 @@ class QdrantDocumentStore(DocumentStore):
         filter: Optional[DocumentMetadataFilter] = None,
         delete_all: Optional[bool] = None,
     ) -> bool:
+        raise NotImplementedError
+
+    async def _embedding_documents(
+        self, documents: List[Document]
+    ) -> List[DocumentWithEmbedding]:
         raise NotImplementedError
