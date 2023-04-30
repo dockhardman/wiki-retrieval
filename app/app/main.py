@@ -23,7 +23,9 @@ def create_app():
         doc_store = QdrantDocumentStore(collection_name=settings.QDRANT_COLLECTION)
         app.ctx.document_store = doc_store
         touch_doc_store = await doc_store.touch()
-        if touch_doc_store is False:
+        if touch_doc_store:
+            logger.debug("Connected to document store.")
+        else:
             raise ValueError(
                 f'Failed to touch document store: "{doc_store.host}:{doc_store.port}"'
             )
