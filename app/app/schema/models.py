@@ -38,7 +38,7 @@ class DocumentMetadata:
 class Document:
     name: Text
     text: Text
-    text_md5: Text = field(init=False)
+    text_md5: Optional[Text] = field(init=False)
     id: Optional[Text] = None
     metadata: Optional[DocumentMetadata] = None
 
