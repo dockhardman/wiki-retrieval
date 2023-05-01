@@ -1,4 +1,5 @@
 import datetime
+from dataclasses import asdict
 from typing import List, Optional, Text
 
 import qdrant_client
@@ -8,7 +9,6 @@ from qdrant_client.models import models as qdrant_models
 from .abc import DocumentStore
 from app.config import logger, settings
 from app.schema.models import (
-    Document,
     DocumentWithEmbedding,
     DocumentMetadataFilter,
     Query,
@@ -69,21 +69,22 @@ class QdrantDocumentStore(DocumentStore):
                 logger.exception(e)
         return False
 
-    async def upsert(self, documents: List[Document]) -> List[Text]:
+    async def upsert(self, documents: List[DocumentWithEmbedding]) -> List[Text]:
         created_at = datetime.datetime.utcnow().isoformat()
-        emb_documents = await self._embedding_documents(documents)
         points = [
             qdrant_models.PointStruct(
+                id=doc.id,
                 vector=doc.embedding,
                 payload={
                     "id": doc.id,
                     "name": doc.name,
                     "text": doc.text,
-                    "metadata": doc.metadata.dict(),
+                    "text_md5": doc.text_md5,
+                    "metadata": asdict(doc.metadata) if doc.metadata else {},
                     "created_at": created_at,
                 },
             )
-            for doc in emb_documents
+            for doc in documents
         ]
         self.client.upsert(
             collection_name=self.collection_name,
@@ -101,9 +102,4 @@ class QdrantDocumentStore(DocumentStore):
         filter: Optional[DocumentMetadataFilter] = None,
         delete_all: Optional[bool] = None,
     ) -> bool:
-        raise NotImplementedError
-
-    async def _embedding_documents(
-        self, documents: List[Document]
-    ) -> List[DocumentWithEmbedding]:
         raise NotImplementedError
