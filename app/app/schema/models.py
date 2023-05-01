@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+import hashlib
+from dataclasses import dataclass, field
 from typing import List, Optional, Text
 
 
@@ -20,13 +21,31 @@ class DocumentMetadata:
     source_id: Optional[Text] = None
     url: Optional[Text] = None
 
+    def __post_init__(self):
+        if self.author:
+            self.author = self.author.strip()
+        if self.created_at:
+            self.created_at = self.created_at.strip()
+        if self.source:
+            self.source = self.source.strip()
+        if self.source_id:
+            self.source_id = self.source_id.strip()
+        if self.url:
+            self.url = self.url.strip()
+
 
 @dataclass
 class Document:
     name: Text
     text: Text
+    text_md5: Text = field(init=False)
     id: Optional[Text] = None
     metadata: Optional[DocumentMetadata] = None
+
+    def __post_init__(self):
+        self.name = self.name.strip()
+        self.text = self.text.strip()
+        self.text_md5 = hashlib.md5(self.text.encode()).hexdigest()
 
 
 @dataclass
