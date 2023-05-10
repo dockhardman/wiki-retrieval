@@ -16,8 +16,8 @@ from sanic.response import text as PlainTextResponse, json as JsonResponse
 from app.config import logger, settings
 from app.deps import click_timer, get_document_store
 from app.document_store import QdrantDocumentStore
-from app.schema.api import UpsertCall, UpsertResponse
-from app.schema.models import DocumentWithEmbedding
+from app.schema.api import QueryCall, QueryResponse, UpsertCall, UpsertResponse
+from app.schema.models import DocumentWithEmbedding, QueryWithEmbedding
 from app.schema.openai import OpenaiEmbeddingResult
 
 
@@ -93,6 +93,34 @@ def create_app():
         except Exception as e:
             logger.exception(e)
             raise ServerError("Internal Service Error")
+
+    @app.post("/query")
+    @app.post("/sub/query", name="sub_query")
+    @openapi.body(QueryCall, body_argument="query_call")
+    async def query(request: "Request", doc_store: "QdrantDocumentStore"):
+        try:
+            query_call = from_dict(data_class=QueryCall, data=request.json)
+        except Exception:
+            raise BadRequest("Invalid request body")
+
+        emb = await request.app.dispatch(
+            "openai.embedding.text",
+            context=dict(texts=[query.query.strip() for query in query_call.queries]),
+        )
+        await emb
+        embeddings = emb.result()
+
+        emb_queries: List[QueryWithEmbedding] = []
+        for query, embedding in zip(query_call.queries, embeddings):
+            emb_queries.append(
+                from_dict(
+                    data_class=QueryWithEmbedding,
+                    data=dict(asdict(query), embedding=embedding),
+                )
+            )
+
+        query_results = await doc_store.query(queries=emb_queries)
+        return JsonResponse(asdict(QueryResponse(results=query_results)))
 
     # Dependencies injection
     app.ext.add_dependency(Timer, click_timer)

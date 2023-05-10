@@ -9,10 +9,11 @@ from qdrant_client.models import models as qdrant_models
 from .abc import DocumentStore
 from app.config import logger, settings
 from app.schema.models import (
-    DocumentWithEmbedding,
     DocumentMetadataFilter,
-    Query,
+    DocumentWithEmbedding,
+    DocumentWithScore,
     QueryResult,
+    QueryWithEmbedding,
 )
 
 
@@ -93,8 +94,37 @@ class QdrantDocumentStore(DocumentStore):
         )
         return [d.id for d in documents]
 
-    async def query(self, queries: List[Query]) -> List[QueryResult]:
-        raise NotImplementedError
+    async def query(self, queries: List[QueryWithEmbedding]) -> List[QueryResult]:
+        search_requests = [
+            qdrant_models.SearchRequest(
+                vector=query.embedding,
+                filter=self._convert_filter(query.filter),
+                limit=query.top_k,  # type: ignore
+                with_payload=True,
+                with_vector=False,
+            )
+            for query in queries
+        ]
+        results = self.client.search_batch(
+            collection_name=self.collection_name,
+            requests=search_requests,
+        )
+        return [
+            QueryResult(
+                query=query.query,
+                results=[
+                    DocumentWithScore(
+                        id=point.payload.get("id") if point.payload else None,
+                        text=point.payload.get("text"),
+                        metadata=point.payload.get("metadata"),
+                        embedding=point.vector,
+                        score=point.score,
+                    )
+                    for point in result
+                ],
+            )
+            for query, result in zip(queries, results)
+        ]
 
     async def delete(
         self,
