@@ -98,8 +98,8 @@ class QdrantDocumentStore(DocumentStore):
         search_requests = [
             qdrant_models.SearchRequest(
                 vector=query.embedding,
-                filter=self._convert_filter(query.filter),
-                limit=query.top_k,  # type: ignore
+                filter=None,
+                limit=query.top_k,
                 with_payload=True,
                 with_vector=False,
             )

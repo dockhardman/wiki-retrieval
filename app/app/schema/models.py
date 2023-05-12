@@ -1,5 +1,4 @@
-import hashlib
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Optional, Text
 
 
@@ -15,6 +14,7 @@ class _WithEmbedding:
 
 @dataclass
 class DocumentMetadata:
+    name: Optional[Text] = None
     author: Optional[Text] = None
     created_at: Optional[Text] = None
     source: Optional[Text] = None
@@ -36,25 +36,18 @@ class DocumentMetadata:
 
 @dataclass
 class Document:
-    name: Text
     text: Text
-    text_md5: Optional[Text] = field(init=False)
     id: Optional[Text] = None
     metadata: Optional[DocumentMetadata] = None
-
-    def __post_init__(self):
-        self.name = self.name.strip()
-        self.text = self.text.strip()
-        self.text_md5 = hashlib.md5(self.text.encode()).hexdigest()
-
-
-@dataclass
-class DocumentWithScore(Document, _WithScore):
-    pass
 
 
 @dataclass
 class DocumentWithEmbedding(Document, _WithEmbedding):
+    pass
+
+
+@dataclass
+class DocumentWithScore(DocumentWithEmbedding, _WithScore):
     pass
 
 
