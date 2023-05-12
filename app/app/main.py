@@ -16,7 +16,14 @@ from sanic.response import text as PlainTextResponse, json as JsonResponse
 from app.config import logger, settings
 from app.deps import click_timer, get_document_store
 from app.document_store import QdrantDocumentStore
-from app.schema.api import QueryCall, QueryResponse, UpsertCall, UpsertResponse
+from app.schema.api import (
+    DeleteCall,
+    DeleteResponse,
+    QueryCall,
+    QueryResponse,
+    UpsertCall,
+    UpsertResponse,
+)
 from app.schema.models import DocumentWithEmbedding, QueryWithEmbedding
 from app.schema.openai import OpenaiEmbeddingResult
 
@@ -121,6 +128,28 @@ def create_app():
 
         query_results = await doc_store.query(queries=emb_queries)
         return JsonResponse(asdict(QueryResponse(results=query_results)))
+
+    @app.delete("/delete")
+    @openapi.body(DeleteCall, body_argument="delete_call")
+    async def delete(request: "Request", doc_store: "QdrantDocumentStore"):
+        try:
+            delete_call = from_dict(data_class=DeleteCall, data=request.json)
+        except Exception:
+            raise BadRequest("Invalid request body")
+
+        if not (delete_call.ids or delete_call.filter or delete_call.delete_all):
+            raise BadRequest("One of ids, filter, or delete_all is required")
+
+        try:
+            success = await doc_store.delete(
+                ids=delete_call.ids,
+                filter=delete_call.filter,
+                delete_all=delete_call.delete_all,
+            )
+            return JsonResponse(asdict(DeleteResponse(success=success)))
+        except Exception as e:
+            logger.exception(e)
+            raise ServerError("Internal Service Error")
 
     # Dependencies injection
     app.ext.add_dependency(Timer, click_timer)

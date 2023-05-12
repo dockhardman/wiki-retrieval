@@ -132,4 +132,18 @@ class QdrantDocumentStore(DocumentStore):
         filter: Optional[DocumentMetadataFilter] = None,
         delete_all: Optional[bool] = None,
     ) -> bool:
-        raise NotImplementedError
+        if ids is None and filter is None and delete_all is None:
+            raise ValueError(
+                "Please provide one of the parameters: ids, filter or delete_all."
+            )
+
+        if delete_all:
+            points_selector = qdrant_models.Filter()
+        else:
+            points_selector = self._convert_filter(filter, ids)
+
+        response = self.client.delete(
+            collection_name=self.collection_name,
+            points_selector=points_selector,
+        )
+        return qdrant_models.UpdateStatus.COMPLETED == response.status
