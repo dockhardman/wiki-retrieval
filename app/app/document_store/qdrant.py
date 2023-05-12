@@ -1,4 +1,6 @@
-from typing import Dict, List, Optional, Text
+import datetime
+from dataclasses import asdict
+from typing import List, Optional, Text
 
 import qdrant_client
 from pyassorted.asyncio import run_func
@@ -7,10 +9,9 @@ from qdrant_client.models import models as qdrant_models
 from .abc import DocumentStore
 from app.config import logger, settings
 from app.schema.models import (
-    Document,
-    DocumentChunk,
     DocumentMetadataFilter,
-    Query,
+    DocumentWithEmbedding,
+    DocumentWithScore,
     QueryResult,
     QueryWithEmbedding,
 )
@@ -69,19 +70,61 @@ class QdrantDocumentStore(DocumentStore):
                 logger.exception(e)
         return False
 
-    async def upsert(
-        self, documents: List[Document], chunk_token_size: Optional[int] = None
-    ) -> List[Text]:
-        raise NotImplementedError
+    async def upsert(self, documents: List[DocumentWithEmbedding]) -> List[Text]:
+        created_at = datetime.datetime.utcnow().isoformat()
+        points = [
+            qdrant_models.PointStruct(
+                id=doc.id,
+                vector=doc.embedding,
+                payload={
+                    "id": doc.id,
+                    "name": doc.name,
+                    "text": doc.text,
+                    "text_md5": doc.text_md5,
+                    "metadata": asdict(doc.metadata) if doc.metadata else {},
+                    "created_at": created_at,
+                },
+            )
+            for doc in documents
+        ]
+        self.client.upsert(
+            collection_name=self.collection_name,
+            points=points,
+            wait=True,
+        )
+        return [d.id for d in documents]
 
-    async def _upsert(self, chunks: Dict[str, List[DocumentChunk]]) -> List[Text]:
-        raise NotImplementedError
-
-    async def query(self, queries: List[Query]) -> List[QueryResult]:
-        raise NotImplementedError
-
-    async def _query(self, queries: List[QueryWithEmbedding]) -> List[QueryResult]:
-        raise NotImplementedError
+    async def query(self, queries: List[QueryWithEmbedding]) -> List[QueryResult]:
+        search_requests = [
+            qdrant_models.SearchRequest(
+                vector=query.embedding,
+                filter=None,
+                limit=query.top_k,
+                with_payload=True,
+                with_vector=False,
+            )
+            for query in queries
+        ]
+        results = self.client.search_batch(
+            collection_name=self.collection_name,
+            requests=search_requests,
+        )
+        return [
+            QueryResult(
+                query=query.query,
+                results=[
+                    DocumentWithScore(
+                        id=point.payload.get("id") if point.payload else None,
+                        text=point.payload.get("text"),
+                        metadata=point.payload.get("metadata"),
+                        embedding=point.vector,
+                        score=point.score,
+                    )
+                    for point in result
+                ],
+            )
+            for query, result in zip(queries, results)
+        ]
 
     async def delete(
         self,
@@ -89,4 +132,18 @@ class QdrantDocumentStore(DocumentStore):
         filter: Optional[DocumentMetadataFilter] = None,
         delete_all: Optional[bool] = None,
     ) -> bool:
-        raise NotImplementedError
+        if ids is None and filter is None and delete_all is None:
+            raise ValueError(
+                "Please provide one of the parameters: ids, filter or delete_all."
+            )
+
+        if delete_all:
+            points_selector = qdrant_models.Filter()
+        else:
+            points_selector = self._convert_filter(filter, ids)
+
+        response = self.client.delete(
+            collection_name=self.collection_name,
+            points_selector=points_selector,
+        )
+        return qdrant_models.UpdateStatus.COMPLETED == response.status

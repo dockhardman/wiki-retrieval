@@ -19,6 +19,7 @@ dacite = "*"
 pyassorted = "*"
 pymediawiki = "*"
 qdrant-client = "*"
+arrow = "*"
 
 [tool.poetry.group.dev.dependencies]
 black = "*"

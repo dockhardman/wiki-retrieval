@@ -8,51 +8,46 @@ class _WithScore:
 
 
 @dataclass
-class _WithChunks:
-    chunks: List["DocumentChunk"]
-
-
-@dataclass
 class _WithEmbedding:
     embedding: List[float]
 
 
 @dataclass
 class DocumentMetadata:
+    name: Optional[Text] = None
     author: Optional[Text] = None
     created_at: Optional[Text] = None
     source: Optional[Text] = None
     source_id: Optional[Text] = None
     url: Optional[Text] = None
 
-
-@dataclass
-class DocumentChunkMetadata(DocumentMetadata):
-    document_id: Optional[Text] = None
-
-
-@dataclass
-class DocumentChunk:
-    metadata: DocumentChunkMetadata
-    text: str
-    embedding: Optional[List[float]] = None
-    id: Optional[Text] = None
-
-
-@dataclass
-class DocumentChunkWithScore(DocumentChunk, _WithScore):
-    pass
+    def __post_init__(self):
+        if self.author:
+            self.author = self.author.strip()
+        if self.created_at:
+            self.created_at = self.created_at.strip()
+        if self.source:
+            self.source = self.source.strip()
+        if self.source_id:
+            self.source_id = self.source_id.strip()
+        if self.url:
+            self.url = self.url.strip()
 
 
 @dataclass
 class Document:
-    text: str
+    text: Text
     id: Optional[Text] = None
     metadata: Optional[DocumentMetadata] = None
 
 
 @dataclass
-class DocumentWithChunks(Document, _WithChunks):
+class DocumentWithEmbedding(Document, _WithEmbedding):
+    pass
+
+
+@dataclass
+class DocumentWithScore(DocumentWithEmbedding, _WithScore):
     pass
 
 
@@ -68,7 +63,7 @@ class DocumentMetadataFilter:
 
 @dataclass
 class Query:
-    query: str
+    query: Text
     filter: Optional[DocumentMetadataFilter] = None
     top_k: Optional[int] = 3
 
@@ -80,5 +75,5 @@ class QueryWithEmbedding(Query, _WithEmbedding):
 
 @dataclass
 class QueryResult:
-    query: str
-    results: List[DocumentChunkWithScore]
+    query: Text
+    results: List[DocumentWithScore]
