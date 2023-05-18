@@ -28,9 +28,7 @@ class Document:
             self.text = self.text.strip()
         self.metadata = self.metadata or {}
 
-    def to_document_with_embedding(
-        self, embedding: List[float]
-    ) -> "DocumentWithEmbedding":
+    def with_embedding(self, embedding: List[float]) -> "DocumentWithEmbedding":
         return DocumentWithEmbedding(
             id=self.id,
             text=self.text,
@@ -54,6 +52,18 @@ class Query:
     query: Text
     filter: Optional[Dict[Text, Any]] = None
     top_k: Optional[int] = 3
+
+    def __post_init__(self):
+        self.query = self.query.strip()
+        self.filter = self.filter or {}
+
+    def with_embedding(self, embedding: List[float]) -> "QueryWithEmbedding":
+        return QueryWithEmbedding(
+            query=self.query,
+            filter=self.filter,
+            top_k=self.top_k,
+            embedding=embedding,
+        )
 
 
 @dataclass

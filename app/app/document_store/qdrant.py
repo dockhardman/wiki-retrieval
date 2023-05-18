@@ -93,7 +93,7 @@ class QdrantDocumentStore(DocumentStore):
         search_requests = [
             qdrant_models.SearchRequest(
                 vector=query.embedding,
-                filter=None,
+                filter=query.filter,
                 limit=query.top_k,
                 with_payload=True,
                 with_vector=False,
@@ -110,7 +110,7 @@ class QdrantDocumentStore(DocumentStore):
                 results=[
                     DocumentWithScore(
                         id=point.payload.get("id") if point.payload else None,
-                        text=point.payload.get("text"),
+                        text=point.payload.get("text", ""),
                         metadata=point.payload.get("metadata"),
                         embedding=point.vector,
                         score=point.score,
