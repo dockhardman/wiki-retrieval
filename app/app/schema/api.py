@@ -1,9 +1,8 @@
 from dataclasses import dataclass
-from typing import List, Optional, Text
+from typing import Any, Dict, List, Optional, Text
 
 from .models import (
     Document,
-    DocumentMetadataFilter,
     Query,
     QueryResult,
 )
@@ -32,7 +31,7 @@ class QueryResponse:
 @dataclass
 class DeleteCall:
     ids: Optional[List[Text]] = None
-    filter: Optional[DocumentMetadataFilter] = None
+    filter: Optional[Dict[Text, Any]] = None
     delete_all: Optional[bool] = False
 
 

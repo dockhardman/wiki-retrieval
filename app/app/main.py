@@ -1,7 +1,6 @@
 import asyncio
-import uuid
 from dataclasses import asdict
-from typing import List, Text, Union
+from typing import List, Text
 
 import openai
 import sanic
@@ -16,15 +15,7 @@ from sanic.response import text as PlainTextResponse, json as JsonResponse
 from app.config import logger, settings
 from app.deps import click_timer, get_document_store
 from app.document_store import QdrantDocumentStore
-from app.schema.api import (
-    DeleteCall,
-    DeleteResponse,
-    QueryCall,
-    QueryResponse,
-    UpsertCall,
-    UpsertResponse,
-)
-from app.schema.models import DocumentWithEmbedding, QueryWithEmbedding
+from app.schema import api as api_model
 from app.schema.openai import OpenaiEmbeddingResult
 
 
@@ -64,10 +55,15 @@ def create_app():
         return PlainTextResponse("OK")
 
     @app.post("/upsert")
-    @openapi.body(UpsertCall, body_argument="upsert_call")
+    @openapi.definition(
+        summary="Upsert documents",
+        description="Upsert documents to document store",
+        body=api_model.UpsertCall,
+        response=api_model.UpsertResponse,
+    )
     async def upsert(request: "Request", doc_store: "QdrantDocumentStore"):
         try:
-            upsert_call = from_dict(data_class=UpsertCall, data=request.json)
+            upsert_call = from_dict(data_class=api_model.UpsertCall, data=request.json)
         except Exception:
             raise BadRequest("Invalid request body")
 
@@ -75,65 +71,64 @@ def create_app():
             raise BadRequest("Empty documents")
 
         try:
-            emb_docs: List["DocumentWithEmbedding"] = []
-            emb_task = await request.app.dispatch(
-                "openai.embedding.text",
-                context=dict(texts=[doc.text for doc in upsert_call.documents]),
+            # Embedding
+            _embeddings = await dispatch_embeddings(
+                request=request, texts=[doc.text for doc in upsert_call.documents]
             )
-            emb_task_result: List[
-                Union[Exception, List[List[float]]]
-            ] = await asyncio.gather(emb_task)
-            _embeddings = emb_task_result[0]
-            for doc, emb in zip(upsert_call.documents, _embeddings):
-                if isinstance(emb, Exception):
-                    raise ServerError("Internal Service Error")
-                emb_doc = from_dict(
-                    data_class=DocumentWithEmbedding,
-                    data=dict(embedding=emb, **asdict(doc)),
-                )
-                if not emb_doc.id:
-                    emb_doc.id = str(uuid.uuid4())
-                emb_docs.append(emb_doc)
+            emb_docs = [
+                doc.with_embedding(embedding=emb)
+                for doc, emb in zip(upsert_call.documents, _embeddings)
+            ]
 
+            # Upsert
             ids = await doc_store.upsert(documents=emb_docs)
-            return JsonResponse(asdict(UpsertResponse(ids=ids)))
+            return JsonResponse(asdict(api_model.UpsertResponse(ids=ids)))
+
         except Exception as e:
             logger.exception(e)
             raise ServerError("Internal Service Error")
 
     @app.post("/query")
     @app.post("/sub/query", name="sub_query")
-    @openapi.body(QueryCall, body_argument="query_call")
+    @openapi.definition(
+        summary="Query documents",
+        description="Query documents from document store",
+        body=api_model.QueryCall,
+        response=api_model.QueryResponse,
+    )
     async def query(request: "Request", doc_store: "QdrantDocumentStore"):
         try:
-            query_call = from_dict(data_class=QueryCall, data=request.json)
+            query_call = from_dict(data_class=api_model.QueryCall, data=request.json)
         except Exception:
             raise BadRequest("Invalid request body")
 
-        emb = await request.app.dispatch(
-            "openai.embedding.text",
-            context=dict(texts=[query.query.strip() for query in query_call.queries]),
-        )
-        await emb
-        embeddings = emb.result()
-
-        emb_queries: List[QueryWithEmbedding] = []
-        for query, embedding in zip(query_call.queries, embeddings):
-            emb_queries.append(
-                from_dict(
-                    data_class=QueryWithEmbedding,
-                    data=dict(asdict(query), embedding=embedding),
-                )
+        try:
+            # Embedding
+            _embeddings = await dispatch_embeddings(
+                request=request, texts=[query.query for query in query_call.queries]
             )
+            emb_queries = [
+                doc.with_embedding(embedding=emb)
+                for doc, emb in zip(query_call.queries, _embeddings)
+            ]
 
-        query_results = await doc_store.query(queries=emb_queries)
-        return JsonResponse(asdict(QueryResponse(results=query_results)))
+            query_results = await doc_store.query(queries=emb_queries)
+            return JsonResponse(asdict(api_model.QueryResponse(results=query_results)))
+
+        except Exception as e:
+            logger.exception(e)
+            raise ServerError("Internal Service Error")
 
     @app.delete("/delete")
-    @openapi.body(DeleteCall, body_argument="delete_call")
+    @openapi.definition(
+        summary="Delete documents",
+        description="Delete documents from document store",
+        body=api_model.DeleteCall,
+        response=api_model.DeleteResponse,
+    )
     async def delete(request: "Request", doc_store: "QdrantDocumentStore"):
         try:
-            delete_call = from_dict(data_class=DeleteCall, data=request.json)
+            delete_call = from_dict(data_class=api_model.DeleteCall, data=request.json)
         except Exception:
             raise BadRequest("Invalid request body")
 
@@ -146,10 +141,24 @@ def create_app():
                 filter=delete_call.filter,
                 delete_all=delete_call.delete_all,
             )
-            return JsonResponse(asdict(DeleteResponse(success=success)))
+            return JsonResponse(asdict(api_model.DeleteResponse(success=success)))
+
         except Exception as e:
             logger.exception(e)
             raise ServerError("Internal Service Error")
+
+    async def dispatch_embeddings(
+        request: "Request", texts: List[Text]
+    ) -> List[List[float]]:
+        emb_task: "asyncio.Task" = await request.app.dispatch(
+            "openai.embedding.text",
+            context=dict(texts=texts),
+        )
+        await emb_task
+        embeddings = emb_task.result()
+        if isinstance(embeddings, Exception):
+            raise ServerError("Internal Service Error")
+        return embeddings
 
     # Dependencies injection
     app.ext.add_dependency(Timer, click_timer)

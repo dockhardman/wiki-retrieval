@@ -1,6 +1,6 @@
 import datetime
 from dataclasses import asdict
-from typing import List, Optional, Text
+from typing import Dict, List, Optional, Text
 
 import qdrant_client
 from pyassorted.asyncio import run_func
@@ -9,7 +9,6 @@ from qdrant_client.models import models as qdrant_models
 from .abc import DocumentStore
 from app.config import logger, settings
 from app.schema.models import (
-    DocumentMetadataFilter,
     DocumentWithEmbedding,
     DocumentWithScore,
     QueryResult,
@@ -64,6 +63,7 @@ class QdrantDocumentStore(DocumentStore):
                             distance=self.distance,
                         ),
                     )
+                    return True
                 except Exception as e:
                     logger.exception(e)
             else:
@@ -72,21 +72,16 @@ class QdrantDocumentStore(DocumentStore):
 
     async def upsert(self, documents: List[DocumentWithEmbedding]) -> List[Text]:
         created_at = datetime.datetime.utcnow().isoformat()
-        points = [
-            qdrant_models.PointStruct(
+        points: List[qdrant_models.PointStruct] = []
+        for doc in documents:
+            _point = qdrant_models.PointStruct(
                 id=doc.id,
                 vector=doc.embedding,
-                payload={
-                    "id": doc.id,
-                    "name": doc.name,
-                    "text": doc.text,
-                    "text_md5": doc.text_md5,
-                    "metadata": asdict(doc.metadata) if doc.metadata else {},
-                    "created_at": created_at,
-                },
+                payload=asdict(doc),
             )
-            for doc in documents
-        ]
+            _point.payload["created_at"] = created_at
+            points.append(_point)
+
         self.client.upsert(
             collection_name=self.collection_name,
             points=points,
@@ -98,7 +93,7 @@ class QdrantDocumentStore(DocumentStore):
         search_requests = [
             qdrant_models.SearchRequest(
                 vector=query.embedding,
-                filter=None,
+                filter=query.filter,
                 limit=query.top_k,
                 with_payload=True,
                 with_vector=False,
@@ -115,7 +110,7 @@ class QdrantDocumentStore(DocumentStore):
                 results=[
                     DocumentWithScore(
                         id=point.payload.get("id") if point.payload else None,
-                        text=point.payload.get("text"),
+                        text=point.payload.get("text", ""),
                         metadata=point.payload.get("metadata"),
                         embedding=point.vector,
                         score=point.score,
@@ -129,7 +124,7 @@ class QdrantDocumentStore(DocumentStore):
     async def delete(
         self,
         ids: Optional[List[Text]] = None,
-        filter: Optional[DocumentMetadataFilter] = None,
+        filter: Optional[Dict] = None,
         delete_all: Optional[bool] = None,
     ) -> bool:
         if ids is None and filter is None and delete_all is None:
@@ -139,8 +134,10 @@ class QdrantDocumentStore(DocumentStore):
 
         if delete_all:
             points_selector = qdrant_models.Filter()
+        elif ids:
+            points_selector = qdrant_models.PointIdsList(points=ids)
         else:
-            points_selector = self._convert_filter(filter, ids)
+            points_selector = filter
 
         response = self.client.delete(
             collection_name=self.collection_name,

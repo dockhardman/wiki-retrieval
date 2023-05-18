@@ -1,9 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import List, Optional, Text
+from typing import Dict, List, Optional, Text
 
 from app.schema.models import (
     Document,
-    DocumentMetadataFilter,
     Query,
     QueryResult,
 )
@@ -36,7 +35,7 @@ class DocumentStore(ABC):
     async def delete(
         self,
         ids: Optional[List[Text]] = None,
-        filter: Optional[DocumentMetadataFilter] = None,
+        filter: Optional[Dict] = None,
         delete_all: Optional[bool] = None,
     ) -> bool:
         raise NotImplementedError
