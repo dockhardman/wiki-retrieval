@@ -134,8 +134,10 @@ class QdrantDocumentStore(DocumentStore):
 
         if delete_all:
             points_selector = qdrant_models.Filter()
+        elif ids:
+            points_selector = qdrant_models.PointIdsList(points=ids)
         else:
-            points_selector = self._convert_filter(filter, ids)
+            points_selector = filter
 
         response = self.client.delete(
             collection_name=self.collection_name,

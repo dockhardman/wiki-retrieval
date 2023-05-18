@@ -110,7 +110,7 @@ def create_app():
             raise ServerError("Internal Service Error")
 
     @app.delete("/delete")
-    @openapi.body(api_model.DeleteCall, body_argument="delete_call")
+    @openapi.body(api_model.DeleteCall)
     async def delete(request: "Request", doc_store: "QdrantDocumentStore"):
         try:
             delete_call = from_dict(data_class=api_model.DeleteCall, data=request.json)
@@ -127,6 +127,7 @@ def create_app():
                 delete_all=delete_call.delete_all,
             )
             return JsonResponse(asdict(api_model.DeleteResponse(success=success)))
+
         except Exception as e:
             logger.exception(e)
             raise ServerError("Internal Service Error")
