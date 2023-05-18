@@ -55,7 +55,12 @@ def create_app():
         return PlainTextResponse("OK")
 
     @app.post("/upsert")
-    @openapi.body(api_model.UpsertCall)
+    @openapi.definition(
+        summary="Upsert documents",
+        description="Upsert documents to document store",
+        body=api_model.UpsertCall,
+        response=api_model.UpsertResponse,
+    )
     async def upsert(request: "Request", doc_store: "QdrantDocumentStore"):
         try:
             upsert_call = from_dict(data_class=api_model.UpsertCall, data=request.json)
@@ -85,7 +90,12 @@ def create_app():
 
     @app.post("/query")
     @app.post("/sub/query", name="sub_query")
-    @openapi.body(api_model.QueryCall)
+    @openapi.definition(
+        summary="Query documents",
+        description="Query documents from document store",
+        body=api_model.QueryCall,
+        response=api_model.QueryResponse,
+    )
     async def query(request: "Request", doc_store: "QdrantDocumentStore"):
         try:
             query_call = from_dict(data_class=api_model.QueryCall, data=request.json)
@@ -110,7 +120,12 @@ def create_app():
             raise ServerError("Internal Service Error")
 
     @app.delete("/delete")
-    @openapi.body(api_model.DeleteCall)
+    @openapi.definition(
+        summary="Delete documents",
+        description="Delete documents from document store",
+        body=api_model.DeleteCall,
+        response=api_model.DeleteResponse,
+    )
     async def delete(request: "Request", doc_store: "QdrantDocumentStore"):
         try:
             delete_call = from_dict(data_class=api_model.DeleteCall, data=request.json)
