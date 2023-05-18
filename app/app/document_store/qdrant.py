@@ -64,6 +64,7 @@ class QdrantDocumentStore(DocumentStore):
                             distance=self.distance,
                         ),
                     )
+                    return True
                 except Exception as e:
                     logger.exception(e)
             else:
