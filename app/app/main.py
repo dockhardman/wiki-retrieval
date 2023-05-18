@@ -151,6 +151,19 @@ def create_app():
             logger.exception(e)
             raise ServerError("Internal Service Error")
 
+    async def dispatch_embeddings(
+        request: "Request", texts: List[Text]
+    ) -> List[List[float]]:
+        emb_task: "asyncio.Task" = await request.app.dispatch(
+            "openai.embedding.text",
+            context=dict(texts=texts),
+        )
+        await emb_task
+        embeddings = emb_task.result()
+        if isinstance(embeddings, Exception):
+            raise ServerError("Internal Service Error")
+        return embeddings
+
     # Dependencies injection
     app.ext.add_dependency(Timer, click_timer)
     app.ext.add_dependency(QdrantDocumentStore, get_document_store)
