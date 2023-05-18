@@ -1,5 +1,6 @@
+import uuid
 from dataclasses import dataclass
-from typing import List, Optional, Text
+from typing import Any, Dict, List, Optional, Text
 
 
 @dataclass
@@ -13,32 +14,29 @@ class _WithEmbedding:
 
 
 @dataclass
-class DocumentMetadata:
-    name: Optional[Text] = None
-    author: Optional[Text] = None
-    created_at: Optional[Text] = None
-    source: Optional[Text] = None
-    source_id: Optional[Text] = None
-    url: Optional[Text] = None
-
-    def __post_init__(self):
-        if self.author:
-            self.author = self.author.strip()
-        if self.created_at:
-            self.created_at = self.created_at.strip()
-        if self.source:
-            self.source = self.source.strip()
-        if self.source_id:
-            self.source_id = self.source_id.strip()
-        if self.url:
-            self.url = self.url.strip()
-
-
-@dataclass
 class Document:
     text: Text
     id: Optional[Text] = None
-    metadata: Optional[DocumentMetadata] = None
+    metadata: Optional[Dict[Text, Any]] = None
+
+    def __post_init__(self):
+        if self.id:
+            self.id = self.id.strip()
+        else:
+            self.id = str(uuid.uuid4())
+        if self.text:
+            self.text = self.text.strip()
+        self.metadata = self.metadata or {}
+
+    def to_document_with_embedding(
+        self, embedding: List[float]
+    ) -> "DocumentWithEmbedding":
+        return DocumentWithEmbedding(
+            id=self.id,
+            text=self.text,
+            metadata=self.metadata,
+            embedding=embedding,
+        )
 
 
 @dataclass
@@ -52,19 +50,9 @@ class DocumentWithScore(DocumentWithEmbedding, _WithScore):
 
 
 @dataclass
-class DocumentMetadataFilter:
-    document_id: Optional[Text] = None
-    source: Optional[Text] = None
-    source_id: Optional[Text] = None
-    author: Optional[Text] = None
-    start_date: Optional[Text] = None
-    end_date: Optional[Text] = None
-
-
-@dataclass
 class Query:
     query: Text
-    filter: Optional[DocumentMetadataFilter] = None
+    filter: Optional[Dict[Text, Any]] = None
     top_k: Optional[int] = 3
 
 

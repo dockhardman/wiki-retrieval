@@ -1,7 +1,6 @@
 import asyncio
-import uuid
 from dataclasses import asdict
-from typing import List, Text, Union
+from typing import List, Text
 
 import openai
 import sanic
@@ -24,7 +23,7 @@ from app.schema.api import (
     UpsertCall,
     UpsertResponse,
 )
-from app.schema.models import DocumentWithEmbedding, QueryWithEmbedding
+from app.schema.models import QueryWithEmbedding
 from app.schema.openai import OpenaiEmbeddingResult
 
 
@@ -75,28 +74,19 @@ def create_app():
             raise BadRequest("Empty documents")
 
         try:
-            emb_docs: List["DocumentWithEmbedding"] = []
-            emb_task = await request.app.dispatch(
-                "openai.embedding.text",
-                context=dict(texts=[doc.text for doc in upsert_call.documents]),
+            # Embedding
+            _embeddings = await dispatch_embeddings(
+                request=request, texts=[doc.text for doc in upsert_call.documents]
             )
-            emb_task_result: List[
-                Union[Exception, List[List[float]]]
-            ] = await asyncio.gather(emb_task)
-            _embeddings = emb_task_result[0]
-            for doc, emb in zip(upsert_call.documents, _embeddings):
-                if isinstance(emb, Exception):
-                    raise ServerError("Internal Service Error")
-                emb_doc = from_dict(
-                    data_class=DocumentWithEmbedding,
-                    data=dict(embedding=emb, **asdict(doc)),
-                )
-                if not emb_doc.id:
-                    emb_doc.id = str(uuid.uuid4())
-                emb_docs.append(emb_doc)
+            emb_docs = [
+                doc.to_document_with_embedding(embedding=emb)
+                for doc, emb in zip(upsert_call.documents, _embeddings)
+            ]
 
+            # Upsert
             ids = await doc_store.upsert(documents=emb_docs)
             return JsonResponse(asdict(UpsertResponse(ids=ids)))
+
         except Exception as e:
             logger.exception(e)
             raise ServerError("Internal Service Error")
