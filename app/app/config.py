@@ -30,6 +30,9 @@ class Settings:
             "LOG_SERVICE_FILENAME", "service.log"
         )
 
+        # Service Config
+        self.max_top_k: int = 20
+
         # Language Config
         self.detect_languages = [
             "ENGLISH",

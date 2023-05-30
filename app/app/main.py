@@ -76,7 +76,7 @@ def create_app():
 
     @app.signal("wiki.documents.fetch_and_upsert")
     async def wiki_documents_fetch_and_upsert(
-        query: Text, exclude_names: Optional[List[Text]] = None, **kwargs
+        query: Text, top_k: int, exclude_names: Optional[List[Text]] = None, **kwargs
     ) -> None:
         wiki_client: "WikiClient" = app.ctx.wiki_client
         lang_detector: "LanguageDetector" = app.ctx.language_detector
@@ -88,6 +88,7 @@ def create_app():
         docs = await wiki_client.async_query(
             query=query,
             lang=language.iso_code_639_1.name.lower(),
+            top_k=top_k,
             exclude_titles=exclude_names,
         )
         docs = [doc for doc in docs if doc.metadata["name"] not in exclude_names]
@@ -172,7 +173,7 @@ def create_app():
 
             query_results = await doc_store.query(queries=emb_queries)
 
-            for query_result in query_results:
+            for _query_call, query_result in zip(query_call.queries, query_results):
                 existed_doc_names = [
                     doc.metadata["name"]
                     for doc in query_result.results
@@ -182,6 +183,7 @@ def create_app():
                     "wiki.documents.fetch_and_upsert",
                     context=dict(
                         query=query_result.query,
+                        top_k=_query_call.top_k,
                         exclude_names=existed_doc_names,
                     ),
                 )

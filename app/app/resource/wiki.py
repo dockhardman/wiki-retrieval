@@ -5,7 +5,7 @@ from mediawiki import MediaWiki
 from mediawiki.exceptions import PageError
 from pyassorted.asyncio import run_func
 
-from app.config import logger
+from app.config import logger, settings
 from app.exceptions import NotFound
 from app.schema.models import Document
 
@@ -13,7 +13,7 @@ from app.schema.models import Document
 class WikiClient:
     max_timeout: int = 120
     default_timeout: int = 15
-    max_top_k: int = 10
+    max_top_k: int = settings.max_top_k
     max_sentences: int = 8
     max_chars: int = 4000
 

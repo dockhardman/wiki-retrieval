@@ -2,6 +2,8 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Text
 
+from app.config import settings
+
 
 @dataclass
 class _WithScore:
@@ -51,11 +53,12 @@ class DocumentWithScore(DocumentWithEmbedding, _WithScore):
 class Query:
     query: Text
     filter: Optional[Dict[Text, Any]] = None
-    top_k: Optional[int] = 3
+    top_k: Optional[int] = 5
 
     def __post_init__(self):
         self.query = self.query.strip()
         self.filter = self.filter or {}
+        self.top_k = min(self.top_k, settings.max_top_k)
 
     def with_embedding(self, embedding: List[float]) -> "QueryWithEmbedding":
         return QueryWithEmbedding(
