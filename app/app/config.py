@@ -30,6 +30,25 @@ class Settings:
             "LOG_SERVICE_FILENAME", "service.log"
         )
 
+        # Service Config
+        self.max_top_k: int = 20
+
+        # Language Config
+        self.detect_languages = [
+            "ENGLISH",
+            "SPANISH",
+            "GERMAN",
+            "JAPANESE",
+            "FRENCH",
+            "RUSSIAN",
+            "ITALIAN",
+            "CHINESE",
+            "POLISH",
+            "DUTCH",
+            "PORTUGUESE",
+            "SWEDISH",
+        ]
+
         # OpenAI Config
         self.OPENAI_API_KEY = environ.get("OPENAI_API_KEY")
 

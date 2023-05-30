@@ -1,10 +1,12 @@
 import asyncio
 from dataclasses import asdict
-from typing import List, Text
+from typing import List, Optional, Text
 
+import aiohttp
 import openai
 import sanic
 from dacite import from_dict
+from lingua import Language, LanguageDetector, LanguageDetectorBuilder
 from openai.openai_object import OpenAIObject
 from pyassorted.datetime import Timer
 from sanic_ext import openapi
@@ -13,8 +15,9 @@ from sanic.request import Request
 from sanic.response import text as PlainTextResponse, json as JsonResponse
 
 from app.config import logger, settings
-from app.deps import click_timer, get_document_store
+from app.deps import click_timer, get_document_store, language_detector
 from app.document_store import QdrantDocumentStore
+from app.resource.wiki import WikiClient
 from app.schema import api as api_model
 from app.schema.openai import OpenaiEmbeddingResult
 
@@ -29,6 +32,7 @@ def create_app():
         # Set OpenAI credential
         openai.api_key = settings.OPENAI_API_KEY
         logger.debug("Have set OpenAI credential.")
+
         # Create document store client
         doc_store = QdrantDocumentStore(collection_name=settings.QDRANT_COLLECTION)
         app.ctx.document_store = doc_store
@@ -40,6 +44,26 @@ def create_app():
                 f'Failed to touch document store: "{doc_store.host}:{doc_store.port}"'
             )
 
+        # Language detection
+        detect_languages: List["Language"] = []
+        for _lang in settings.detect_languages:
+            try:
+                detect_languages.append(Language[_lang.upper()])
+            except KeyError:
+                logger.warning(f"Language {_lang} not supported.")
+        detect_languages = detect_languages or [Language.ENGLISH]
+        app.ctx.language_detector = LanguageDetectorBuilder.from_languages(
+            *detect_languages
+        ).build()
+        logger.debug(
+            "Have set language detector with languages: "
+            + f"{', '.join([l.name for l in detect_languages])}."
+        )
+
+        # Wiki client
+        app.ctx.wiki_client = WikiClient()
+        logger.debug("Wiki client has been initialized.")
+
     @app.signal("openai.embedding.text")
     async def openai_embedding_text(texts: List[Text], **context) -> List[List[float]]:
         texts = [texts] if isinstance(texts, Text) else texts
@@ -49,6 +73,38 @@ def create_app():
         )
         emb_res: OpenaiEmbeddingResult = emb_res_obj.to_dict_recursive()
         return [emb["embedding"] for emb in emb_res["data"]]
+
+    @app.signal("wiki.documents.fetch_and_upsert")
+    async def wiki_documents_fetch_and_upsert(
+        query: Text, top_k: int, exclude_names: Optional[List[Text]] = None, **kwargs
+    ) -> None:
+        wiki_client: "WikiClient" = app.ctx.wiki_client
+        lang_detector: "LanguageDetector" = app.ctx.language_detector
+
+        query = query.strip()
+        exclude_names = exclude_names or []
+        language = lang_detector.detect_language_of(query)
+
+        docs = await wiki_client.async_query(
+            query=query,
+            lang=language.iso_code_639_1.name.lower(),
+            top_k=top_k,
+            exclude_titles=exclude_names,
+        )
+        docs = [doc for doc in docs if doc.metadata["name"] not in exclude_names]
+        if not docs:
+            return
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "http://localhost/upsert",
+                json=asdict(api_model.UpsertCall(documents=docs)),
+            ) as resp:
+                resp.raise_for_status()
+        logger.info(
+            f"Upserted {len(docs)} documents from Wiki: "
+            + f"{', '.join([doc.metadata['name'] for doc in docs])}."
+        )
 
     @app.get("/")
     async def root(request: "Request"):
@@ -96,7 +152,10 @@ def create_app():
         body=api_model.QueryCall,
         response=api_model.QueryResponse,
     )
-    async def query(request: "Request", doc_store: "QdrantDocumentStore"):
+    async def query(
+        request: "Request",
+        doc_store: "QdrantDocumentStore",
+    ):
         try:
             query_call = from_dict(data_class=api_model.QueryCall, data=request.json)
         except Exception:
@@ -113,6 +172,32 @@ def create_app():
             ]
 
             query_results = await doc_store.query(queries=emb_queries)
+
+            for _query_call, query_result in zip(query_call.queries, query_results):
+                if any(map(lambda doc: doc.score >= 0.9, query_result.results)):
+                    logger.debug(
+                        "Skip wiki fetch. We have enough score with query "
+                        + f"'{query_result.query}'."
+                    )
+                    continue  # Skip if we have enough score
+
+                fetch_and_upsert_wiki_docs_task = request.app.dispatch(
+                    "wiki.documents.fetch_and_upsert",
+                    context=dict(
+                        query=query_result.query,
+                        top_k=_query_call.top_k,
+                        exclude_names=[
+                            doc.metadata["name"]
+                            for doc in query_result.results
+                            if doc.metadata.get("name")
+                        ],
+                    ),
+                )
+                app.add_task(
+                    fetch_and_upsert_wiki_docs_task,
+                    name=f"Task-wiki.documents.fetch_and_upsert-({query_result.query},)",
+                )
+
             return JsonResponse(asdict(api_model.QueryResponse(results=query_results)))
 
         except Exception as e:
@@ -161,8 +246,9 @@ def create_app():
         return embeddings
 
     # Dependencies injection
-    app.ext.add_dependency(Timer, click_timer)
+    app.ext.add_dependency(LanguageDetector, language_detector)
     app.ext.add_dependency(QdrantDocumentStore, get_document_store)
+    app.ext.add_dependency(Timer, click_timer)
 
     # Blueprint
 

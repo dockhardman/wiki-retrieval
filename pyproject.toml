@@ -11,7 +11,7 @@ packages = [{include = "wiki_retrieval"}]
 python = ">=3.8.0,<3.11.0"
 rich = "*"
 pytz = "*"
-urllib3 = "*"
+urllib3 = "1.*"
 sanic = {extras = ["ext"], version = ">=23.3.0"}
 openai = ">=0.27.0"
 tiktoken = "*"
@@ -20,6 +20,7 @@ pyassorted = "*"
 pymediawiki = "*"
 qdrant-client = "*"
 arrow = "*"
+lingua-language-detector = "*"
 
 [tool.poetry.group.dev.dependencies]
 black = "*"
