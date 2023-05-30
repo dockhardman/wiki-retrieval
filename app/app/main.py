@@ -5,6 +5,7 @@ from typing import List, Text
 import openai
 import sanic
 from dacite import from_dict
+from lingua import Language, LanguageDetector, LanguageDetectorBuilder
 from openai.openai_object import OpenAIObject
 from pyassorted.datetime import Timer
 from sanic_ext import openapi
@@ -13,7 +14,7 @@ from sanic.request import Request
 from sanic.response import text as PlainTextResponse, json as JsonResponse
 
 from app.config import logger, settings
-from app.deps import click_timer, get_document_store
+from app.deps import click_timer, get_document_store, language_detector
 from app.document_store import QdrantDocumentStore
 from app.schema import api as api_model
 from app.schema.openai import OpenaiEmbeddingResult
@@ -29,6 +30,7 @@ def create_app():
         # Set OpenAI credential
         openai.api_key = settings.OPENAI_API_KEY
         logger.debug("Have set OpenAI credential.")
+
         # Create document store client
         doc_store = QdrantDocumentStore(collection_name=settings.QDRANT_COLLECTION)
         app.ctx.document_store = doc_store
@@ -39,6 +41,22 @@ def create_app():
             raise ValueError(
                 f'Failed to touch document store: "{doc_store.host}:{doc_store.port}"'
             )
+
+        # Language detection
+        detect_languages: List["Language"] = []
+        for _lang in settings.detect_languages:
+            try:
+                detect_languages.append(Language[_lang.upper()])
+            except KeyError:
+                logger.warning(f"Language {_lang} not supported.")
+        detect_languages = detect_languages or [Language.ENGLISH]
+        app.ctx.language_detector = LanguageDetectorBuilder.from_languages(
+            *detect_languages
+        ).build()
+        logger.debug(
+            "Have set language detector with languages: "
+            + f"{', '.join([l.name for l in detect_languages])}."
+        )
 
     @app.signal("openai.embedding.text")
     async def openai_embedding_text(texts: List[Text], **context) -> List[List[float]]:
@@ -96,7 +114,11 @@ def create_app():
         body=api_model.QueryCall,
         response=api_model.QueryResponse,
     )
-    async def query(request: "Request", doc_store: "QdrantDocumentStore"):
+    async def query(
+        request: "Request",
+        doc_store: "QdrantDocumentStore",
+        lang_detector: "LanguageDetector",
+    ):
         try:
             query_call = from_dict(data_class=api_model.QueryCall, data=request.json)
         except Exception:
@@ -161,8 +183,9 @@ def create_app():
         return embeddings
 
     # Dependencies injection
-    app.ext.add_dependency(Timer, click_timer)
+    app.ext.add_dependency(LanguageDetector, language_detector)
     app.ext.add_dependency(QdrantDocumentStore, get_document_store)
+    app.ext.add_dependency(Timer, click_timer)
 
     # Blueprint
 
