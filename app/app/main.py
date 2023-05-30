@@ -8,6 +8,7 @@ from dacite import from_dict
 from lingua import Language, LanguageDetector, LanguageDetectorBuilder
 from openai.openai_object import OpenAIObject
 from pyassorted.datetime import Timer
+from rich import print
 from sanic_ext import openapi
 from sanic.exceptions import BadRequest, ServerError
 from sanic.request import Request
@@ -72,6 +73,18 @@ def create_app():
         )
         emb_res: OpenaiEmbeddingResult = emb_res_obj.to_dict_recursive()
         return [emb["embedding"] for emb in emb_res["data"]]
+
+    @app.signal("wiki.documents.fetch_and_upsert")
+    async def wiki_documents_fetch_and_upsert(query: Text, **kwargs) -> None:
+        wiki_client: "WikiClient" = app.ctx.wiki_client
+        lang_detector: "LanguageDetector" = app.ctx.language_detector
+
+        language = lang_detector.detect_language_of(query)
+
+        docs = await wiki_client.async_query(
+            query=query, lang=language.iso_code_639_1.name.lower()
+        )
+        print(docs)
 
     @app.get("/")
     async def root(request: "Request"):
@@ -139,6 +152,15 @@ def create_app():
             ]
 
             query_results = await doc_store.query(queries=emb_queries)
+            for query_result in query_results:
+                fetch_and_upsert_wiki_docs_task = request.app.dispatch(
+                    "wiki.documents.fetch_and_upsert",
+                    context=dict(query=query_result.query),
+                )
+                app.add_task(
+                    fetch_and_upsert_wiki_docs_task,
+                    name="Task-wiki.documents.fetch_and_upsert-(query_result.query,)",
+                )
             return JsonResponse(asdict(api_model.QueryResponse(results=query_results)))
 
         except Exception as e:

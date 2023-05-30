@@ -5,6 +5,7 @@ from mediawiki import MediaWiki
 from mediawiki.exceptions import PageError
 from pyassorted.asyncio import run_func
 
+from app.config import logger
 from app.exceptions import NotFound
 from app.schema.models import Document
 
@@ -12,22 +13,23 @@ from app.schema.models import Document
 class WikiClient:
     max_timeout: int = 120
     default_timeout: int = 15
-    max_top_k: int = 5
+    max_top_k: int = 10
     max_sentences: int = 8
     max_chars: int = 4000
 
     def __init__(
         self,
         default_lang: Text = "en",
-        top_k: int = 3,
+        top_k: int = 5,
         sentences: int = 4,
         chars: int = 0,
         timeout: float = default_timeout,
         concurrent: int = 2,
     ):
         self.default_lang = default_lang
+        self.default_client = MediaWiki(lang=self.default_lang, timeout=timeout)
         self.lang_client_map: Dict[Text, MediaWiki] = {
-            self.default_lang: MediaWiki(lang=self.default_lang, timeout=timeout)
+            self.default_lang: self.default_client
         }
         self.top_k = min(top_k, self.max_top_k)
         self.sentences = min(sentences, self.max_sentences)
@@ -39,7 +41,7 @@ class WikiClient:
 
     @property
     def supported_languages(self) -> Set[Text]:
-        return set(self.get_client(lang=self.default_lang).supported_languages.keys())
+        return set(self.default_client.supported_languages.keys())
 
     def get_client(self, lang: Optional[Text] = None) -> "MediaWiki":
         lang = lang.lower().strip() if lang else self.default_lang
@@ -75,6 +77,7 @@ class WikiClient:
         )
         if suggestion:
             titles.append(suggestion)
+        logger.debug(f"Query '{query}' to wiki({lang}) returned titles: {titles}")
 
         title_to_content: Dict[Text, Optional[Union[Text, Exception]]] = {
             title: None for title in titles
@@ -97,6 +100,24 @@ class WikiClient:
                     title_to_content[title] = page_content
                 except Exception as e:
                     title_to_content[title] = e
+
+        docs: List[Document] = []
+        for title, _content in title_to_content.items():
+            if isinstance(_content, Exception):
+                logger.exception(_content)
+                continue
+
+            if not _content:
+                logger.error(f"Wiki page {title} not found.")
+                continue
+
+            content = _content or ""
+            doc = Document(
+                text=content,
+                metadata=dict(name=title, title=title, source="wiki", lang=lang),
+            )
+            docs.append(doc)
+        return docs
 
     async def async_query(
         self,
