@@ -1,6 +1,6 @@
 import asyncio
 from dataclasses import asdict
-from typing import List, Text
+from typing import List, Optional, Text
 
 import aiohttp
 import openai
@@ -75,15 +75,22 @@ def create_app():
         return [emb["embedding"] for emb in emb_res["data"]]
 
     @app.signal("wiki.documents.fetch_and_upsert")
-    async def wiki_documents_fetch_and_upsert(query: Text, **kwargs) -> None:
+    async def wiki_documents_fetch_and_upsert(
+        query: Text, exclude_names: Optional[List[Text]] = None, **kwargs
+    ) -> None:
         wiki_client: "WikiClient" = app.ctx.wiki_client
         lang_detector: "LanguageDetector" = app.ctx.language_detector
 
+        query = query.strip()
+        exclude_names = exclude_names or []
         language = lang_detector.detect_language_of(query)
 
         docs = await wiki_client.async_query(
-            query=query, lang=language.iso_code_639_1.name.lower()
+            query=query,
+            lang=language.iso_code_639_1.name.lower(),
+            exclude_titles=exclude_names,
         )
+        docs = [doc for doc in docs if doc.metadata["name"] not in exclude_names]
         if not docs:
             return
 
@@ -164,15 +171,25 @@ def create_app():
             ]
 
             query_results = await doc_store.query(queries=emb_queries)
+
             for query_result in query_results:
+                existed_doc_names = [
+                    doc.metadata["name"]
+                    for doc in query_result.results
+                    if doc.metadata.get("name")
+                ]
                 fetch_and_upsert_wiki_docs_task = request.app.dispatch(
                     "wiki.documents.fetch_and_upsert",
-                    context=dict(query=query_result.query),
+                    context=dict(
+                        query=query_result.query,
+                        exclude_names=existed_doc_names,
+                    ),
                 )
                 app.add_task(
                     fetch_and_upsert_wiki_docs_task,
                     name="Task-wiki.documents.fetch_and_upsert-(query_result.query,)",
                 )
+
             return JsonResponse(asdict(api_model.QueryResponse(results=query_results)))
 
         except Exception as e:

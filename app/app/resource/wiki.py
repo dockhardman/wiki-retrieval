@@ -62,6 +62,7 @@ class WikiClient:
         sentences: Optional[int] = None,
         chars: Optional[int] = None,
         timeout: Optional[float] = None,
+        exclude_titles: Optional[List[Text]] = None,
     ) -> List[Document]:
         query = query.strip()
         lang = lang.lower().strip() if lang else self.default_lang
@@ -78,6 +79,8 @@ class WikiClient:
         if suggestion:
             titles.append(suggestion)
         logger.debug(f"Query '{query}' to wiki({lang}) returned titles: {titles}")
+
+        titles = [title for title in titles if title not in exclude_titles]
 
         title_to_content: Dict[Text, Optional[Union[Text, Exception]]] = {
             title: None for title in titles
@@ -127,6 +130,7 @@ class WikiClient:
         sentences: Optional[int] = None,
         chars: Optional[int] = None,
         timeout: Optional[float] = None,
+        exclude_titles: Optional[List[Text]] = None,
     ) -> List[Document]:
         docs = await run_func(
             self.query,
@@ -136,6 +140,7 @@ class WikiClient:
             sentences=sentences,
             chars=chars,
             timeout=timeout,
+            exclude_titles=exclude_titles,
         )
         return docs
 
