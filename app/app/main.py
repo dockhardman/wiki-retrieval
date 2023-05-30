@@ -2,13 +2,13 @@ import asyncio
 from dataclasses import asdict
 from typing import List, Text
 
+import aiohttp
 import openai
 import sanic
 from dacite import from_dict
 from lingua import Language, LanguageDetector, LanguageDetectorBuilder
 from openai.openai_object import OpenAIObject
 from pyassorted.datetime import Timer
-from rich import print
 from sanic_ext import openapi
 from sanic.exceptions import BadRequest, ServerError
 from sanic.request import Request
@@ -84,7 +84,19 @@ def create_app():
         docs = await wiki_client.async_query(
             query=query, lang=language.iso_code_639_1.name.lower()
         )
-        print(docs)
+        if not docs:
+            return
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "http://localhost/upsert",
+                json=asdict(api_model.UpsertCall(documents=docs)),
+            ) as resp:
+                resp.raise_for_status()
+        logger.info(
+            f"Upserted {len(docs)} documents from Wiki: "
+            + f"{', '.join([doc.metadata['name'] for doc in docs])}."
+        )
 
     @app.get("/")
     async def root(request: "Request"):
