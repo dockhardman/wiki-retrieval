@@ -174,22 +174,28 @@ def create_app():
             query_results = await doc_store.query(queries=emb_queries)
 
             for _query_call, query_result in zip(query_call.queries, query_results):
-                existed_doc_names = [
-                    doc.metadata["name"]
-                    for doc in query_result.results
-                    if doc.metadata.get("name")
-                ]
+                if any(map(lambda doc: doc.score >= 0.9, query_result.results)):
+                    logger.debug(
+                        "Skip wiki fetch. We have enough score with query "
+                        + f"'{query_result.query}'."
+                    )
+                    continue  # Skip if we have enough score
+
                 fetch_and_upsert_wiki_docs_task = request.app.dispatch(
                     "wiki.documents.fetch_and_upsert",
                     context=dict(
                         query=query_result.query,
                         top_k=_query_call.top_k,
-                        exclude_names=existed_doc_names,
+                        exclude_names=[
+                            doc.metadata["name"]
+                            for doc in query_result.results
+                            if doc.metadata.get("name")
+                        ],
                     ),
                 )
                 app.add_task(
                     fetch_and_upsert_wiki_docs_task,
-                    name="Task-wiki.documents.fetch_and_upsert-(query_result.query,)",
+                    name=f"Task-wiki.documents.fetch_and_upsert-({query_result.query},)",
                 )
 
             return JsonResponse(asdict(api_model.QueryResponse(results=query_results)))
