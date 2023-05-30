@@ -16,6 +16,7 @@ from sanic.response import text as PlainTextResponse, json as JsonResponse
 from app.config import logger, settings
 from app.deps import click_timer, get_document_store, language_detector
 from app.document_store import QdrantDocumentStore
+from app.resource.wiki import WikiClient
 from app.schema import api as api_model
 from app.schema.openai import OpenaiEmbeddingResult
 
@@ -57,6 +58,10 @@ def create_app():
             "Have set language detector with languages: "
             + f"{', '.join([l.name for l in detect_languages])}."
         )
+
+        # Wiki client
+        app.ctx.wiki_client = WikiClient()
+        logger.debug("Wiki client has been initialized.")
 
     @app.signal("openai.embedding.text")
     async def openai_embedding_text(texts: List[Text], **context) -> List[List[float]]:
@@ -117,7 +122,6 @@ def create_app():
     async def query(
         request: "Request",
         doc_store: "QdrantDocumentStore",
-        lang_detector: "LanguageDetector",
     ):
         try:
             query_call = from_dict(data_class=api_model.QueryCall, data=request.json)

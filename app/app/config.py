@@ -43,7 +43,7 @@ class Settings:
             "POLISH",
             "DUTCH",
             "PORTUGUESE",
-            "SWEDIS",
+            "SWEDISH",
         ]
 
         # OpenAI Config
