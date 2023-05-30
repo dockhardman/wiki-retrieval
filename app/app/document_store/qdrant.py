@@ -79,7 +79,7 @@ class QdrantDocumentStore(DocumentStore):
                 vector=doc.embedding,
                 payload=asdict(doc),
             )
-            _point.payload["created_at"] = created_at
+            _point.payload["metadata"]["created_at"] = created_at
             points.append(_point)
 
         self.client.upsert(
